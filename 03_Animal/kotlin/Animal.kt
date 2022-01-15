@@ -1,119 +1,97 @@
 /**
  * ANIMAL
  *
- *
  * Converted from BASIC to Kotlin by John Long (@patimen)
+ * Changes by Paul Holt (@chiefpad)
  *
- * Animal is basically a perfect example of a binary tree. Implement it
- * as such, with the QuestionNode either having an answer if it is a terminal node
- * or a Question
+ * Animal is basically a perfect example of a learning binary decision tree. Implement it
+ * as such, with the Node either being an Answer if it is a leaf node
+ * or a Question if it is a non-terminal node.
  */
 
 fun main() {
     printIntro()
-    val rootQuestionNode =
-        QuestionOrAnswer(question = Question("DOES IT SWIM", QuestionOrAnswer("FISH"), QuestionOrAnswer("BIRD")))
-    while (true) {
-        val choice = ask("ARE YOU THINKING OF AN ANIMAL")
+    do {
+        val thinking = "ARE YOU THINKING OF AN ANIMAL".ask
         when {
-            choice == "LIST" -> printKnownAnimals(rootQuestionNode)
-            choice.startsWith("Q") -> return
-            choice.startsWith("Y") -> {
-                // A wrong answer means it's a new animal!
-                val wrongAnswer = rootQuestionNode.getWrongAnswer()
-                if (wrongAnswer == null) {
-                    // The computer got the right answer!
-                    println("WHY NOT TRY ANOTHER ANIMAL?")
-                } else {
-                    // Get a new question to ask next time
-                    wrongAnswer.askForInformationAndSave()
-                }
-            }
+            thinking.startsWith("Y") -> root.guess()
+            thinking == "LIST" -> root.list()
         }
-    }
-}
-
-// Takes care of asking a question (on the same line) and getting
-// an answer or a blank string
-fun ask(question: String): String {
-    print("$question? ")
-    return readln().uppercase() ?: ""
-}
-
-// Special case for a "yes or no" question, returns true of yes
-fun askYesOrNo(question: String): Boolean {
-    return generateSequence {
-        print("$question? ")
-        readln()
-    }.firstNotNullOf { yesOrNo(it) }
-}
-
-// If neither Y (true) or N (false), return null, so the above sequence
-// will just keep executing until it gets the answer
-private fun yesOrNo(string: String): Boolean? =
-    when (string.uppercase().firstOrNull()) {
-        'Y' -> true
-        'N' -> false
-        else -> null
-    }
-
-private fun printKnownAnimals(question: QuestionOrAnswer) {
-    println("\nANIMALS I ALREADY KNOW ARE:")
-    val animals = question.getAnswers().chunked(4)
-    animals.forEach { line ->
-        // The '*' in front of line.toTypedArray() "spreads" the array as a list of parameters instead
-        System.out.printf("%-15s".repeat(line.size), *line.toTypedArray())
-        println()
-    }
+    } while (!thinking.startsWith("N"))
 }
 
 private fun printIntro() {
-    println("                                ANIMAL")
-    println("              CREATIVE COMPUTING  MORRISTOWN, NEW JERSEY")
-    println("\n\n")
-    println("PLAY 'GUESS THE ANIMAL'")
-    println("\n")
-    println("THINK OF AN ANIMAL AND THE COMPUTER WILL TRY TO GUESS IT.")
+    println(
+        """
+        ${tab(32)}ANIMAL
+        ${tab(15)}CREATIVE COMPUTING  MORRISTOWN, NEW JERSEY
+
+        PLAY 'GUESS THE ANIMAL'
+        
+        THINK OF AN ANIMAL AND THE COMPUTER WILL TRY TO GUESS IT.
+        """.trimIndent()
+    )
 }
 
-class QuestionOrAnswer(private var answer: String? = null, var question: Question? = null) {
-    fun getAnswers(): List<String> = answer?.let { listOf(it) } ?: question!!.getAnswers()
-    fun getWrongAnswer(): QuestionOrAnswer? {
-        if (answer != null) {
-            // "takeUnless" will return null if the answer is "yes". In this case
-            // we will return the "wrong answer", aka the terminal answer that was incorrect
-            return this.takeUnless { askYesOrNo("IS IT A $answer") }
-        }
-        return question?.getWrongAnswer()
+fun tab(i: Int) = " ".repeat(i)
+
+private val Char?.validate get() = if (this == 'Y') 'Y' else 'N'
+private val Char?.opposite get() = if (this == 'Y') 'N' else 'Y'
+private val String.ask: String
+    get() {
+        print("$this? ")
+        return readLine() ?: throw EndOfInput
     }
 
-    fun askForInformationAndSave() {
-        //Failed to get it right and ran out of questions
-        //Let's ask the user for the new information
-        val newAnimal = ask("THE ANIMAL YOU WERE THINKING OF WAS A")
-        val newQuestion = ask("PLEASE TYPE IN A QUESTION THAT WOULD DISTINGUISH A \n$newAnimal FROM A $answer\n")
-        val newAnswer = askYesOrNo("FOR A $newAnimal THE ANSWER WOULD BE")
+object EndOfInput : Throwable()
 
-        val trueAnswer = if (newAnswer) newAnimal else answer
-        val falseAnswer = if (newAnswer) answer else newAnimal
-        // Replace our answer with null  and set the question with the data we just got
-        // This makes it a question instead of an answer
-        this.answer = null
-        this.question = Question(newQuestion, QuestionOrAnswer(trueAnswer), QuestionOrAnswer(falseAnswer))
+val root = Question(
+    text = "DOES IT SWIM",
+    mutableMapOf(
+        'Y' to Answer("FISH"),
+        'N' to Answer("BIRD")
+    )
+)
+
+interface Node {
+    fun guess(): Boolean
+    fun list(indent: Int = 0)
+}
+
+class Question(val text: String, var children: MutableMap<Char, Node>) : Node {
+
+    override fun guess(): Boolean {
+        val answer = text.ask.firstOrNull()
+        val nextNode = children[answer]
+        if (nextNode?.guess() == false) {
+            val newAnimal = "THE ANIMAL YOU WERE THINKING OF WAS A".ask
+            val newQuestion =
+                "PLEASE TYPE IN A QUESTION THAT WOULD DISTINGUISH A\n$newAnimal FROM A ${(nextNode as? Answer)?.name}".ask
+            val newAnswer = "FOR A $newAnimal THE ANSWER WOULD BE ".ask.firstOrNull().validate
+            if (answer != null)
+                children[answer] = Question(
+                    text = newQuestion,
+                    children = mutableMapOf(newAnswer to Answer(newAnimal), newAnswer.opposite to nextNode)
+                )
+        }
+        return true
+    }
+
+    override fun list(indent: Int) {
+        println(this.text)
+        this.children.forEach { (t, u) ->
+            print("${tab(indent)}$t -> ")
+            u.list(indent + 4)
+        }
     }
 }
 
-class Question(
-    private val question: String,
-    private val trueAnswer: QuestionOrAnswer,
-    private val falseAnswer: QuestionOrAnswer
-) {
-    fun getAnswers(): List<String> = trueAnswer.getAnswers() + falseAnswer.getAnswers()
-
-    fun getWrongAnswer(): QuestionOrAnswer? =
-        if (askYesOrNo(question)) {
-            trueAnswer.getWrongAnswer()
-        } else {
-            falseAnswer.getWrongAnswer()
-        }
+data class Answer(val name: String) : Node {
+    override fun guess(): Boolean {
+        println("IS IT A $name? ")
+        return readLine()?.firstOrNull() == 'Y'
+    }
+    override fun list(indent: Int) {
+        println(name)
+    }
 }
