@@ -27,6 +27,9 @@ public class Awari {
             board[playerPits + i] = 3;
             board[computerPits + i] = 3;
         }
+    }
+
+    void start() {
         System.out.println("		 AWARI");
         System.out.println("CREATIVE COMPUTING MORRISTOWN, NEW JERSEY");
         printBoard();
